@@ -1,39 +1,27 @@
-import torch
 import ollama
-
-from log import logger
-from rag import generate_embeddings, query_topk_embeddings_indices
-from yaml import safe_load
 import streamlit as st
 
-
-def stream_ollama(stream):
-    for chunk in stream:
-        yield chunk["message"]["content"]
-
-
-avatars = {
-    "user": "👨🏽‍💻",
-    "assistant": "🦙",
-}
-headers = {
-    "user": "**User**: ",
-    "assistant": "**Assistant**: ",
-}
+from interfaces.ollama.llama import stream_ollama
+from interfaces.log import logger
+from application.rag import generate_embeddings, query_topk_embeddings_indices
+from application.chat import avatars, headers
+from config import embeddings_model, chat_model
 
 
-config = safe_load(open("./config.yaml"))
+def load_chat_history():
+    for message in st.session_state.messages:
+        role = message["role"]
+        content = message["content"]
+
+        with st.chat_message(role, avatar=avatars[role]):
+            st.markdown(headers[role] + content)
+
 
 st.title("Llama 3")
-
-for message in st.session_state.messages:
-    with st.chat_message(message["role"], avatar=avatars[message["role"]]):
-        st.markdown(headers[message["role"]] + message["content"])
+load_chat_history()
 
 if prompt := st.chat_input("Enter your question..."):
-    user_prompt_embeddings = generate_embeddings(
-        text=prompt, model=config["ollama"]["embeddings_model"]
-    )
+    user_prompt_embeddings = generate_embeddings(text=prompt, model=embeddings_model)
     vault_embeddings_tensor = list(st.session_state.rag_vault.values())
     relevant_rag_documents_indexes = query_topk_embeddings_indices(
         input_embeddings_tensor=user_prompt_embeddings,
@@ -57,9 +45,12 @@ if prompt := st.chat_input("Enter your question..."):
     logger.debug(f"User message: {user_message}")
 
     response = ollama.chat(
-        model=config["ollama"]["chat_model"],
+        model=chat_model,
         messages=[
-            {"role": chat["role"], "content": chat["content"] + chat.get("rag_docs", "")}
+            {
+                "role": chat["role"],
+                "content": chat["content"] + chat.get("rag_docs", ""),
+            }
             for chat in st.session_state.messages
         ],
         stream=True,

@@ -1,9 +1,10 @@
-import pymupdf4llm
-import pymupdf
 import streamlit as st
-from yaml import safe_load
-from rag import generate_embeddings, query_topk_embeddings_indices
-from log import logger
+from application.rag import (
+    generate_embeddings,
+    generate_text_chunks,
+)
+from interfaces.pymupdf import extract_markdown_from_pdf
+from config import embeddings_model
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -12,25 +13,22 @@ if "rag_vault" not in st.session_state:
 if "uploaded_files" not in st.session_state:
     st.session_state.uploaded_files = []
 
-config = safe_load(open("./config.yaml"))
-
 
 def upload_rag():
     uploaded_file = st.file_uploader(
-        label="Upload a file to generate RAG embeddings", type=["pdf"],
+        label="Upload a file to generate RAG embeddings",
+        type=["pdf"],
     )
     if uploaded_file:
-        document = pymupdf.Document(
-            filename=uploaded_file, stream=uploaded_file.getvalue()
-        )
-        md_text = pymupdf4llm.to_markdown(document)
-        for chunk in split_text(md_text):
-            st.session_state.rag_vault[chunk] = generate_embeddings(
-                text=chunk, model=config["ollama"]["embeddings_model"]
-            )
+        md_text = extract_markdown_from_pdf(uploaded_file=uploaded_file)
+        text_chunks = generate_text_chunks(text=md_text)
 
-        st.success("Uploaded successfully!")
+        for chunk in text_chunks:
+            embeddings = generate_embeddings(text=chunk, model=embeddings_model)
+            st.session_state.rag_vault[chunk] = embeddings
+
         st.session_state.uploaded_files.append(uploaded_file)
+        st.success("Uploaded successfully!")
         st.balloons()
 
     if st.session_state["uploaded_files"]:
@@ -39,15 +37,9 @@ def upload_rag():
             st.write(doc.name)
 
 
-def split_text(text: str, chunk_size=250, overlap_size=50):
-    words = text.split()
-    for i in range(overlap_size, len(words), chunk_size):
-        yield " ".join(words[(i - overlap_size) : (i + chunk_size + overlap_size)])
-
-
 pg = st.navigation(
     [
-        st.Page("chat.py", title="Chat", icon="💬"),
+        st.Page("application/chat/chat.py", title="Chat", icon="💬"),
         st.Page(upload_rag, title="RAG Vault", icon="🔒"),
     ]
 )
