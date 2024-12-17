@@ -1,53 +1,54 @@
-import torch
-import ollama
-
-from log import logger
-from rag import generate_embeddings, query_topk_embeddings_indices
-from yaml import safe_load
+import pymupdf4llm
+import pymupdf
 import streamlit as st
-
-
-def stream_ollama(stream):
-    for chunk in stream:
-        yield chunk["message"]["content"]
-
-
-avatars = {
-    "user": "👨🏽‍💻",
-    "assistant": "🦙",
-}
-headers = {
-    "user": "**User**: ",
-    "assistant": "**Assistant**: ",
-}
-
-
-config = safe_load(open("./config.yaml"))
-
-st.title("Llama 3")
+from yaml import safe_load
+from rag import generate_embeddings, query_topk_embeddings_indices
+from log import logger
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "rag_vault" not in st.session_state:
+    st.session_state.rag_vault = {}
+if "uploaded_files" not in st.session_state:
+    st.session_state.uploaded_files = []
 
-for message in st.session_state.messages:
-    with st.chat_message(message["role"], avatar=avatars[message["role"]]):
-        st.markdown(headers[message["role"]] + message["content"])
+config = safe_load(open("./config.yaml"))
 
-if prompt := st.chat_input("Enter your question..."):
-    user_message = {"role": "user", "content": prompt}
-    st.chat_message("user", avatar=avatars["user"]).markdown("**User:** " + prompt)
-    st.session_state.messages.append(user_message)
-    response = ollama.chat(
-        model=config["ollama"]["chat_model"],
-        messages=st.session_state.messages,
-        stream=True,
+
+def upload_rag():
+    uploaded_file = st.file_uploader(
+        label="Upload a file to generate RAG embeddings", type=["pdf"],
     )
-    with st.chat_message("assistant", avatar=avatars["assistant"]):
-        complete_answer = ""
-        answer_placeholder = st.empty()
-        for chunk in stream_ollama(response):
-            complete_answer += chunk
-            answer_placeholder.markdown("**Assistant:** " + complete_answer)
-    st.session_state.messages.append(
-        {"role": "assistant", "content": complete_answer}
-    )
+    if uploaded_file:
+        document = pymupdf.Document(
+            filename=uploaded_file, stream=uploaded_file.getvalue()
+        )
+        md_text = pymupdf4llm.to_markdown(document)
+        for chunk in split_text(md_text):
+            st.session_state.rag_vault[chunk] = generate_embeddings(
+                text=chunk, model=config["ollama"]["embeddings_model"]
+            )
+
+        st.success("Uploaded successfully!")
+        st.session_state.uploaded_files.append(uploaded_file)
+        st.balloons()
+
+    if st.session_state["uploaded_files"]:
+        st.markdown("## RAG Vault")
+        for doc in st.session_state.uploaded_files:
+            st.write(doc.name)
+
+
+def split_text(text: str, chunk_size=250, overlap_size=50):
+    words = text.split()
+    for i in range(overlap_size, len(words), chunk_size):
+        yield " ".join(words[(i - overlap_size) : (i + chunk_size + overlap_size)])
+
+
+pg = st.navigation(
+    [
+        st.Page("chat.py", title="Chat", icon="💬"),
+        st.Page(upload_rag, title="RAG Vault", icon="🔒"),
+    ]
+)
+pg.run()
