@@ -1,7 +1,7 @@
 import ollama
 import streamlit as st
 
-from interfaces.ollama.llama import stream_ollama
+from interfaces.ollama import ollama_client, stream_ollama
 from interfaces.log import logger
 from application.rag import generate_embeddings, query_topk_embeddings_indices
 from application.chat import avatars, headers
@@ -44,7 +44,7 @@ if prompt := st.chat_input("Enter your question..."):
 
     logger.debug(f"User message: {user_message}")
 
-    response = ollama.chat(
+    response = ollama_client.chat(
         model=chat_model,
         messages=[
             {

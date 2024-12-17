@@ -4,3 +4,4 @@ config = safe_load(open("./config.yaml"))
 
 chat_model = config["ollama"]["chat_model"]
 embeddings_model = config["ollama"]["embeddings_model"]
+ollama_host = config["ollama"]["host"]

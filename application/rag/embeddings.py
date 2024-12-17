@@ -3,7 +3,7 @@ import torch
 
 from typing import List, Union
 from interfaces.log import logger
-
+from interfaces.ollama import ollama_client
 
 CHUNK_SIZE = 250
 OVERLAP_SIZE = 50
@@ -16,7 +16,7 @@ def generate_text_chunks(text: str, chunk_size=CHUNK_SIZE, overlap_size=OVERLAP_
 
 
 def generate_embeddings(text: Union[str, List[str]], model: str) -> List:
-    embedding = ollama.embed(model=model, input=text).get("embeddings", [[]])
+    embedding = ollama_client.embed(model=model, input=text).get("embeddings", [[]])
     logger.debug(
         f"Embedding Generated for <{text[:50]}>...: {torch.tensor(embedding).dim()}"
     )

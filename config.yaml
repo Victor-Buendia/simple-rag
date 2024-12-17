@@ -1,3 +1,4 @@
 ollama:
+  host: host.docker.internal
   embeddings_model: mxbai-embed-large
   chat_model: llama3
